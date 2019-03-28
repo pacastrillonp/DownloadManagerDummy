@@ -1,69 +1,74 @@
 package co.pacastrillonp.downloadmanagerdummy
 
-import androidx.appcompat.app.AppCompatActivity
-import android.os.Bundle
-import android.view.View
-import android.widget.Button
 import android.app.DownloadManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
+import android.os.Environment
+import android.view.View
+import android.widget.ImageView
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AppCompatActivity
 import java.io.File
-import android.widget.Toast
-import android.content.Intent
-import android.content.BroadcastReceiver
-import android.content.IntentFilter
 
 
 class MainActivity : AppCompatActivity() {
-    private var downloadID: Long = 0
+
+    private var enqueue: Long = 0
+    private var downloadManager: DownloadManager? = null
+    private var id: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
 
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                val action = intent.action
+                if (DownloadManager.ACTION_DOWNLOAD_COMPLETE == action) {
+//                    val downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, 0)
+                    val query = DownloadManager.Query()
+                    query.setFilterById(enqueue)
+                    val cursor = downloadManager?.query(query)
+                    if (cursor!!.moveToFirst()) {
+                        val columnIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                        if (DownloadManager.STATUS_SUCCESSFUL == cursor.getInt(columnIndex)) {
+
+                            val view = findViewById<ImageView>(R.id.imageView)
+                            val uriString = cursor
+                                .getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI))
+                            view.setImageURI(Uri.parse(uriString))
+                        }
+                    }
+                }
+            }
+        }
+
+        registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        unregisterReceiver(onDownloadComplete)
-    }
 
     /** Called when the user taps the Send button  */
     @RequiresApi(Build.VERSION_CODES.N)
-    fun getImage(view: View) {
-        beginDownload()
+    fun getMedia(view: View) {
+        id++
+        startDownloadImage("https://eteknix-eteknixltd.netdna-ssl.com/wp-content/uploads/2015/05/space-rocket-start-wallpaper-1440x900-011.jpg", "img$id")
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
-    fun beginDownload(){
-        val file = File(getExternalFilesDir(null), "Dummy")
-        /*
-       Create a DownloadManager.Request with all the information necessary to start the download
-        */
-        val request = DownloadManager.Request(Uri.parse("http://i.imgur.com/cEdWOV6.jpg"))
-            .setTitle("Dummy File")// Title of the Download Notification
-            .setDescription("Downloading")// Description of the Download Notification
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)// Visibility of the download Notification
+    fun startDownloadImage(url: String, mediaName: String) {
+        val file = File(Environment.getExternalStorageDirectory().path + "/DownloadManagerDummy/", mediaName)
+        val request = DownloadManager.Request(Uri.parse(url))
             .setDestinationUri(Uri.fromFile(file))// Uri of the destination file
-            .setRequiresCharging(false)// Set if charging is required to begin the download
             .setAllowedOverMetered(true)// Set if download is allowed on Mobile network
-            .setAllowedOverRoaming(true)// Set if download is allowed on roaming network
-        val downloadManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        downloadID = downloadManager.enqueue(request)// enqueue puts the download request in the queue.
-    }
-
-    private val onDownloadComplete = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            //Fetching the download id received with the broadcast
-            val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-            //Checking if the received broadcast is for our enqueued download by matching download id
-            if (downloadID == id) {
-                Toast.makeText(this@MainActivity, "Download Completed", Toast.LENGTH_SHORT).show()
-            }
-        }
+            .setAllowedOverRoaming(false)// Set if download is allowed on roaming network
+        downloadManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        enqueue = downloadManager!!.enqueue(request)
     }
 
 }
